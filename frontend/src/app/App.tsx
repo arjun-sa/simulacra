@@ -15,7 +15,6 @@ import {
   PlaybackSpeed,
   SimEvent,
   SystemSnapshot,
-  ServiceSnapshot,
 } from './types';
 import { NodePalette } from './components/NodePalette';
 import { Canvas } from './components/Canvas';
@@ -26,6 +25,7 @@ import { MetricsPanel } from './components/MetricsPanel';
 import { Toolbar } from './components/Toolbar';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
+import { SimulationEngine } from '../simulation/engine/SimulationEngine';
 
 export default function App() {
   const [nodes, setNodes] = useState<CanvasNode[]>([]);
@@ -40,118 +40,55 @@ export default function App() {
   const [latencySpikeNodes, setLatencySpikeNodes] = useState<Set<string>>(new Set());
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const engineRef = useRef<SimulationEngine | null>(null);
   const nodeIdCounter = useRef(0);
   const edgeIdCounter = useRef(0);
-  const eventIdCounter = useRef(0);
-  const simTimeRef = useRef(0);
-  const runIdRef = useRef('run-0');
 
-  // Mock simulation engine - generates random events
   useEffect(() => {
-    if (playbackState !== 'playing' || nodes.length === 0) return;
+    if (!engineRef.current || playbackState !== 'playing') {
+      return;
+    }
 
     const interval = setInterval(() => {
-      simTimeRef.current += 100 * playbackSpeed;
-
-      // Generate mock events
-      if (Math.random() < 0.3 && edges.length > 0) {
-        const edge = edges[Math.floor(Math.random() * edges.length)];
-        const eventType: SimEvent['type'] = Math.random() < 0.8 ? 'message_sent' : 
-          Math.random() < 0.5 ? 'message_error' : 'message_dropped';
-
-        const newEvent: SimEvent = {
-          id: `event-${eventIdCounter.current++}`,
-          timestamp: simTimeRef.current,
-          type: eventType,
-          sourceNodeId: edge.sourceId,
-          targetNodeId: edge.targetId,
-          messageId: `msg-${Math.random().toString(36).substr(2, 9)}`,
-          latencyMs: 50 + Math.random() * 200,
-          failureInjected: Math.random() < 0.1,
-        };
-
-        setEvents((prev) => [...prev, newEvent]);
-
-        // Handle node crashes and latency spikes
-        if (Math.random() < 0.05) {
-          const randomNode = nodes[Math.floor(Math.random() * nodes.length)];
-          if (Math.random() < 0.5) {
-            setCrashedNodes((prev) => new Set(prev).add(randomNode.id));
-            setEvents((prev) => [
-              ...prev,
-              {
-                id: `event-${eventIdCounter.current++}`,
-                timestamp: simTimeRef.current,
-                type: 'node_crashed',
-                sourceNodeId: randomNode.id,
-                messageId: '',
-                failureInjected: true,
-              },
-            ]);
-          } else {
-            setLatencySpikeNodes((prev) => new Set(prev).add(randomNode.id));
-            setEvents((prev) => [
-              ...prev,
-              {
-                id: `event-${eventIdCounter.current++}`,
-                timestamp: simTimeRef.current,
-                type: 'latency_spike',
-                sourceNodeId: randomNode.id,
-                messageId: '',
-                failureInjected: false,
-              },
-            ]);
-            setTimeout(() => {
-              setLatencySpikeNodes((prev) => {
-                const next = new Set(prev);
-                next.delete(randomNode.id);
-                return next;
-              });
-            }, 2000);
-          }
-        }
+      const engine = engineRef.current;
+      if (engine) {
+        setEvents([...engine.getEvents()]);
       }
     }, 100);
 
     return () => clearInterval(interval);
-  }, [playbackState, playbackSpeed, nodes, edges]);
+  }, [playbackState]);
 
-  // Generate mock snapshots every 2 seconds
   useEffect(() => {
-    if (playbackState !== 'playing' || nodes.length === 0) return;
+    engineRef.current?.setSpeed(playbackSpeed);
+  }, [playbackSpeed]);
 
-    const interval = setInterval(() => {
-      const services: Record<string, ServiceSnapshot> = {};
-      nodes.forEach((node) => {
-        services[node.id] = {
-          nodeId: node.id,
-          snapshotAt: Date.now(),
-          throughputPerSec: 10 + Math.random() * 90,
-          avgLatencyMs: 20 + Math.random() * 180,
-          p95LatencyMs: 50 + Math.random() * 250,
-          errorRate: Math.random() * 0.2,
-          queueDepth: Math.floor(Math.random() * 50),
-          healthScore: crashedNodes.has(node.id) ? 0 : 0.5 + Math.random() * 0.5,
-          circuitBreakerState: node.type === 'circuit_breaker' 
-            ? (['closed', 'open', 'half-open'] as const)[Math.floor(Math.random() * 3)]
-            : undefined,
-        };
-      });
+  useEffect(() => {
+    const crashed = new Set<string>();
+    const latency = new Set<string>();
+    const latestTimestamp = events.length > 0 ? events[events.length - 1].timestamp : 0;
+    const spikeWindowStart = latestTimestamp - 2_000;
 
-      const snapshot: SystemSnapshot = {
-        runId: runIdRef.current,
-        snapshotAt: Date.now(),
-        services,
-        totalThroughput: Object.values(services).reduce((sum, s) => sum + s.throughputPerSec, 0),
-        bottleneckNodeId: nodes.length > 0 ? nodes[Math.floor(Math.random() * nodes.length)].id : null,
-        overallHealthScore: Object.values(services).reduce((sum, s) => sum + s.healthScore, 0) / nodes.length,
-      };
+    for (const event of events) {
+      if (event.type === 'node_crashed') {
+        crashed.add(event.sourceNodeId);
+      } else if (event.type === 'node_recovered') {
+        crashed.delete(event.sourceNodeId);
+      } else if (event.type === 'latency_spike' && event.timestamp >= spikeWindowStart) {
+        latency.add(event.sourceNodeId);
+      }
+    }
 
-      setSystemSnapshot(snapshot);
-    }, 2000);
+    setCrashedNodes(crashed);
+    setLatencySpikeNodes(latency);
+  }, [events]);
 
-    return () => clearInterval(interval);
-  }, [playbackState, nodes, crashedNodes]);
+  useEffect(() => {
+    return () => {
+      engineRef.current?.reset();
+      engineRef.current = null;
+    };
+  }, []);
 
   const handleAddNode = (type: NodeType, x: number, y: number) => {
     const newNode: CanvasNode = {
@@ -276,8 +213,26 @@ export default function App() {
     e.target.value = '';
   };
 
+  const buildTopology = (): TopologyConfig => ({
+    nodes: nodes.map(({ x, y, ...node }) => node),
+    edges,
+  });
+
+  const buildEngine = () => {
+    const engine = new SimulationEngine(buildTopology());
+    engine.onSnapshot((snapshot) => {
+      setSystemSnapshot(snapshot);
+      setEvents([...engine.getEvents()]);
+    });
+    engine.setSpeed(playbackSpeed);
+    engineRef.current = engine;
+    return engine;
+  };
+
   const handleClear = () => {
     if (nodes.length === 0 && edges.length === 0) return;
+    engineRef.current?.reset();
+    engineRef.current = null;
     setNodes([]);
     setEdges([]);
     setSelectedNodeId(null);
@@ -294,53 +249,63 @@ export default function App() {
       toast.error('Add some nodes first');
       return;
     }
+
+    engineRef.current?.reset();
+    const engine = buildEngine();
+    engine.start();
+    setSystemSnapshot(engine.getSnapshot());
+    setEvents([...engine.getEvents()]);
     setPlaybackState('playing');
-    runIdRef.current = `run-${Date.now()}`;
-    simTimeRef.current = 0;
-    setEvents([]);
     setCrashedNodes(new Set());
     setLatencySpikeNodes(new Set());
     toast.success('Simulation started');
   };
 
   const handlePause = () => {
+    engineRef.current?.pause();
     setPlaybackState('paused');
     toast.info('Simulation paused');
   };
 
   const handleResume = () => {
+    const engine = engineRef.current;
+    if (!engine) {
+      toast.error('Start simulation first');
+      return;
+    }
+    engine.resume();
     setPlaybackState('playing');
     toast.success('Simulation resumed');
   };
 
   const handleReset = () => {
+    engineRef.current?.reset();
+    engineRef.current = null;
     setPlaybackState('idle');
     setEvents([]);
     setSystemSnapshot(null);
     setCrashedNodes(new Set());
     setLatencySpikeNodes(new Set());
-    simTimeRef.current = 0;
     toast.info('Simulation reset');
   };
 
   const handleTick = () => {
-    // Single step simulation - generate one event
-    if (edges.length > 0) {
-      const edge = edges[Math.floor(Math.random() * edges.length)];
-      const newEvent: SimEvent = {
-        id: `event-${eventIdCounter.current++}`,
-        timestamp: simTimeRef.current,
-        type: 'message_sent',
-        sourceNodeId: edge.sourceId,
-        targetNodeId: edge.targetId,
-        messageId: `msg-${Math.random().toString(36).substr(2, 9)}`,
-        latencyMs: 100,
-        failureInjected: false,
-      };
-      setEvents((prev) => [...prev, newEvent]);
-      simTimeRef.current += 100;
-      toast.info('Ticked simulation');
+    if (nodes.length === 0) {
+      toast.error('Add some nodes first');
+      return;
     }
+
+    if (!engineRef.current) {
+      buildEngine();
+    }
+
+    engineRef.current?.step();
+    if (engineRef.current) {
+      setSystemSnapshot(engineRef.current.getSnapshot());
+      setEvents([...engineRef.current.getEvents()]);
+    }
+    setPlaybackState('paused');
+    toast.info('Ticked simulation');
   };
 
   const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) || null : null;
