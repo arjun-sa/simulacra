@@ -71,6 +71,7 @@ export default function App() {
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [playbackState, setPlaybackState] = useState<PlaybackState>('idle');
   const [playbackSpeed, setPlaybackSpeed] = useState<PlaybackSpeed>(1);
+  const [throughputMultiplier, setThroughputMultiplier] = useState(1);
   const [events, setEvents] = useState<SimEvent[]>([]);
   const [systemSnapshot, setSystemSnapshot] = useState<SystemSnapshot | null>(null);
   const [crashedNodes, setCrashedNodes] = useState<Set<string>>(new Set());
@@ -312,7 +313,13 @@ export default function App() {
   };
 
   const buildTopology = (): TopologyConfig => ({
-    nodes: nodes.map(({ x, y, ...node }) => node),
+    nodes: nodes.map(({ x, y, ...node }) => ({
+      ...node,
+      throughputPerSec:
+        typeof node.throughputPerSec === 'number'
+          ? Math.max(0, node.throughputPerSec * throughputMultiplier)
+          : node.throughputPerSec,
+    })),
     edges,
   });
 
@@ -442,12 +449,14 @@ export default function App() {
         <PlayerControls
           state={playbackState}
           speed={playbackSpeed}
+          throughputMultiplier={throughputMultiplier}
           onStart={handleStart}
           onPause={handlePause}
           onResume={handleResume}
           onReset={handleReset}
           onTick={handleTick}
           onSpeedChange={setPlaybackSpeed}
+          onThroughputMultiplierChange={setThroughputMultiplier}
         />
 
         <ResizablePanelGroup direction="vertical" className="flex-1">

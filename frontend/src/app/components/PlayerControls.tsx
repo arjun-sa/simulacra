@@ -12,23 +12,27 @@ import { Play, Pause, RotateCcw, SkipForward } from 'lucide-react';
 interface PlayerControlsProps {
   state: PlaybackState;
   speed: PlaybackSpeed;
+  throughputMultiplier: number;
   onStart: () => void;
   onPause: () => void;
   onResume: () => void;
   onReset: () => void;
   onTick: () => void;
   onSpeedChange: (speed: PlaybackSpeed) => void;
+  onThroughputMultiplierChange: (multiplier: number) => void;
 }
 
 export function PlayerControls({
   state,
   speed,
+  throughputMultiplier,
   onStart,
   onPause,
   onResume,
   onReset,
   onTick,
   onSpeedChange,
+  onThroughputMultiplierChange,
 }: PlayerControlsProps) {
   const handlePlayPause = () => {
     if (state === 'idle') {
@@ -80,6 +84,26 @@ export function PlayerControls({
             <SelectItem value="0.5">0.5x</SelectItem>
             <SelectItem value="1">1x</SelectItem>
             <SelectItem value="2">2x</SelectItem>
+            <SelectItem value="5">5x</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium">Throughput:</span>
+        <Select
+          value={throughputMultiplier.toString()}
+          onValueChange={(v) => onThroughputMultiplierChange(parseFloat(v))}
+        >
+          <SelectTrigger className="w-24">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="0.25">0.25x</SelectItem>
+            <SelectItem value="0.5">0.5x</SelectItem>
+            <SelectItem value="1">1x</SelectItem>
+            <SelectItem value="2">2x</SelectItem>
+            <SelectItem value="3">3x</SelectItem>
             <SelectItem value="5">5x</SelectItem>
           </SelectContent>
         </Select>

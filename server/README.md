@@ -42,6 +42,10 @@ The server starts on `http://localhost:3001` (or `PORT`).
 - `DATABRICKS_HTTP_PATH` Optional alternative, e.g. `/sql/1.0/warehouses/45523db66932781d`
 - `DATABRICKS_CATALOG` Optional Unity Catalog name used to fully qualify tables
 - `DATABRICKS_SCHEMA` Optional schema name used to fully qualify tables
+- `PROMETHEUS_ENABLED` Optional, `true` to enable Prometheus integration (default `false`)
+- `PROMETHEUS_MODE` Optional, one of `pushgateway`, `scrape`, `both` (default `pushgateway`)
+- `PUSHGATEWAY_URL` Required when `PROMETHEUS_MODE` includes pushgateway
+- `PROMETHEUS_JOB_NAME` Optional Pushgateway job name (default `simulation`)
 - `PORT` Defaults to `3001`
 
 ## Routes
@@ -109,8 +113,16 @@ curl -X POST http://localhost:3001/runs/end \
 
 ### `GET /health`
 
-Checks Databricks connectivity and reports disabled integrations.
+Checks Databricks connectivity and Prometheus integration health.
 
 ```bash
 curl http://localhost:3001/health
+```
+
+### `GET /metrics/prometheus`
+
+Returns Prometheus exposition format when scrape mode is enabled.
+
+```bash
+curl http://localhost:3001/metrics/prometheus
 ```

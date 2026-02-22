@@ -1,5 +1,14 @@
 import type { SystemSnapshot } from '../types.js';
 
+export type PrometheusMode = 'pushgateway' | 'scrape' | 'both';
+
+export interface PrometheusConfig {
+  enabled: boolean;
+  mode: PrometheusMode;
+  pushgatewayUrl?: string;
+  jobName: string;
+}
+
 function esc(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
@@ -27,8 +36,20 @@ export function toPrometheusText(snapshot: SystemSnapshot): string {
   return `${out.join('\n')}\n`;
 }
 
-export async function pushSnapshotToPushgateway(snapshot: SystemSnapshot, pushgatewayUrl: string): Promise<void> {
-  const res = await fetch(`${pushgatewayUrl}/metrics/job/simulation`, {
+export function shouldPushToGateway(config: PrometheusConfig): boolean {
+  return config.enabled && (config.mode === 'pushgateway' || config.mode === 'both');
+}
+
+export function shouldExposeScrape(config: PrometheusConfig): boolean {
+  return config.enabled && (config.mode === 'scrape' || config.mode === 'both');
+}
+
+export async function pushSnapshotToPushgateway(
+  snapshot: SystemSnapshot,
+  pushgatewayUrl: string,
+  jobName = 'simulation'
+): Promise<void> {
+  const res = await fetch(`${pushgatewayUrl}/metrics/job/${encodeURIComponent(jobName)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain; version=0.0.4' },
     body: toPrometheusText(snapshot)
@@ -39,7 +60,11 @@ export async function pushSnapshotToPushgateway(snapshot: SystemSnapshot, pushga
 export async function checkPushgateway(pushgatewayUrl: string): Promise<'connected' | 'error'> {
   try {
     const res = await fetch(`${pushgatewayUrl}/-/healthy`);
-    return res.ok ? 'connected' : 'error';
+    if (res.ok) return 'connected';
+
+    // Some Pushgateway deployments don't expose /-/healthy.
+    const fallback = await fetch(pushgatewayUrl);
+    return fallback.ok ? 'connected' : 'error';
   } catch {
     return 'error';
   }
