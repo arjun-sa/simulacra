@@ -12,6 +12,7 @@ export interface RunStartPayload {
   runId: string;
   topologyName: string;
   nodeCount: number;
+  topology: TopologyConfig;
 }
 
 export interface RunEndPayload {
@@ -99,9 +100,7 @@ export function isTopologyConfig(value: unknown): value is TopologyConfig {
     return (
       typeof n.id === 'string' &&
       typeof n.label === 'string' &&
-      NODE_TYPES.includes(n.type as NodeType) &&
-      typeof n.x === 'number' &&
-      typeof n.y === 'number'
+      NODE_TYPES.includes(n.type as NodeType)
     );
   });
 

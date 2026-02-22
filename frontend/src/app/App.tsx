@@ -106,13 +106,15 @@ export default function App() {
 
   const toBackendSnapshot = (
     snapshot: SystemSnapshot,
-    nodeTypeMap: Map<string, NodeType>
+    nodeTypeMap: Map<string, NodeType>,
+    nodeLabelMap: Map<string, string>
   ): BackendSystemSnapshot => {
     const services = Object.entries(snapshot.services).reduce<Record<string, BackendServiceSnapshot>>(
       (acc, [nodeId, service]) => {
         const nodeType = nodeTypeMap.get(nodeId) ?? 'worker';
+        const nodeName = nodeLabelMap.get(nodeId) ?? nodeId;
         acc[nodeId] = {
-          nodeId: service.nodeId,
+          nodeId: nodeName,
           nodeType,
           throughputPerSec: service.throughputPerSec,
           avgLatencyMs: service.avgLatencyMs,
@@ -134,7 +136,9 @@ export default function App() {
       system: {
         totalThroughput: snapshot.totalThroughput,
         overallHealthScore: snapshot.overallHealthScore,
-        bottleneckService: snapshot.bottleneckNodeId,
+        bottleneckService: snapshot.bottleneckNodeId
+          ? nodeLabelMap.get(snapshot.bottleneckNodeId) ?? snapshot.bottleneckNodeId
+          : null,
       },
     };
   };
@@ -323,14 +327,14 @@ export default function App() {
     edges,
   });
 
-  const buildEngine = () => {
-    const topology = buildTopology();
+  const buildEngine = (topology: TopologyConfig = buildTopology()) => {
     const nodeTypeMap = new Map(topology.nodes.map((node) => [node.id, node.type] as const));
+    const nodeLabelMap = new Map(topology.nodes.map((node) => [node.id, node.label] as const));
     const engine = new SimulationEngine(topology);
     engine.onSnapshot((snapshot) => {
       setSystemSnapshot(snapshot);
       setEvents([...engine.getEvents()]);
-      const payload = toBackendSnapshot(snapshot, nodeTypeMap);
+      const payload = toBackendSnapshot(snapshot, nodeTypeMap, nodeLabelMap);
       void postJson('/metrics/snapshot', payload).catch((error) => {
         console.error('Failed to push snapshot', error);
       });
@@ -364,7 +368,8 @@ export default function App() {
 
     endActiveRun();
     engineRef.current?.reset();
-    const engine = buildEngine();
+    const topology = buildTopology();
+    const engine = buildEngine(topology);
     engine.start();
     setSystemSnapshot(engine.getSnapshot());
     setEvents([...engine.getEvents()]);
@@ -373,6 +378,7 @@ export default function App() {
       runId: engine.getRunId(),
       topologyName: 'Canvas Topology',
       nodeCount: nodes.length,
+      topology,
     }).catch((error) => {
       console.error('Failed to start run', error);
     });
@@ -432,6 +438,7 @@ export default function App() {
 
   const selectedNode = selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) || null : null;
   const snapshots = systemSnapshot?.services || {};
+  const nodeLabels = Object.fromEntries(nodes.map((node) => [node.id, node.label]));
 
   return (
     <DndProvider backend={HTML5Backend}>
@@ -463,7 +470,7 @@ export default function App() {
           {!metricsCollapsed && (
             <>
               <ResizablePanel defaultSize={24} minSize={16}>
-                <MetricsPanel snapshot={systemSnapshot} events={events} />
+                <MetricsPanel snapshot={systemSnapshot} events={events} nodeLabels={nodeLabels} />
               </ResizablePanel>
 
               <ResizableHandle />

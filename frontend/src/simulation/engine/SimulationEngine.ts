@@ -45,7 +45,6 @@ export class SimulationEngine {
 
   private readonly scheduledDeliveries: ScheduledDelivery[] = [];
   private readonly sinkNodeIds = new Set<string>();
-  private readonly dlqNodeIds: string[] = [];
   private readonly messageLifecycle = new Map<string, MessageLifecycleStatus>();
   private readonly messageCache = new Map<string, SimMessage>();
   private processedEventIndex = 0;
@@ -70,9 +69,6 @@ export class SimulationEngine {
       this.nodeConfigs.set(config.id, config);
       const node = this.createNode(config);
       this.nodes.set(config.id, node);
-      if (config.type === 'dead_letter_queue') {
-        this.dlqNodeIds.push(config.id);
-      }
       if (config.sink) {
         this.sinkNodeIds.add(config.id);
       }
@@ -315,10 +311,7 @@ export class SimulationEngine {
     const downstreamDlq = this.router
       .getDownstreamNodeIds(sourceNodeId)
       .filter((nodeId) => this.isDlqNode(nodeId));
-    if (downstreamDlq.length > 0) {
-      return downstreamDlq[0];
-    }
-    return this.dlqNodeIds[0];
+    return downstreamDlq[0];
   }
 
   private shouldSkipDelivery(messageId: string, targetNodeId: string): boolean {

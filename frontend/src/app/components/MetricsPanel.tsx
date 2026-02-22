@@ -13,6 +13,7 @@ import {
 interface MetricsPanelProps {
   snapshot: SystemSnapshot | null;
   events: SimEvent[];
+  nodeLabels: Record<string, string>;
 }
 
 const EVENT_ICONS: Record<SimEvent['type'], React.ReactNode> = {
@@ -32,7 +33,9 @@ const formatEventType = (type: string) =>
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
 
-export function MetricsPanel({ snapshot, events }: MetricsPanelProps) {
+export function MetricsPanel({ snapshot, events, nodeLabels }: MetricsPanelProps) {
+  const nodeDisplayName = (nodeId: string) => nodeLabels[nodeId] || nodeId;
+
   if (!snapshot) {
     return (
       <div className="h-full p-4 bg-white border-b border-gray-200 overflow-y-auto">
@@ -79,7 +82,7 @@ export function MetricsPanel({ snapshot, events }: MetricsPanelProps) {
         <Card className="p-3">
           <div className="text-xs text-gray-500 mb-1">Bottleneck</div>
           <div className="text-sm font-medium truncate">
-            {snapshot.bottleneckNodeId || 'None'}
+            {snapshot.bottleneckNodeId ? nodeDisplayName(snapshot.bottleneckNodeId) : 'None'}
           </div>
         </Card>
 
@@ -94,7 +97,7 @@ export function MetricsPanel({ snapshot, events }: MetricsPanelProps) {
       <div className="mt-3 grid grid-cols-2 gap-2">
         {Object.entries(snapshot.services).slice(0, 6).map(([nodeId, service]) => (
           <div key={nodeId} className="text-xs p-2 bg-gray-50 rounded">
-            <div className="font-medium truncate mb-1">{nodeId}</div>
+            <div className="font-medium truncate mb-1">{nodeDisplayName(nodeId)}</div>
             <div className="flex gap-3 text-gray-600">
               <span>{service.throughputPerSec.toFixed(1)} req/s</span>
               <span>{service.avgLatencyMs.toFixed(0)}ms</span>
@@ -129,8 +132,8 @@ export function MetricsPanel({ snapshot, events }: MetricsPanelProps) {
                     <span className="text-gray-400">{event.timestamp}ms</span>
                   </div>
                   <div className="text-gray-600 truncate">
-                    {event.sourceNodeId}
-                    {event.targetNodeId && ` -> ${event.targetNodeId}`}
+                    {nodeDisplayName(event.sourceNodeId)}
+                    {event.targetNodeId && ` -> ${nodeDisplayName(event.targetNodeId)}`}
                   </div>
                   {event.latencyMs && (
                     <div className="text-gray-500">Latency: {event.latencyMs}ms</div>

@@ -6,6 +6,7 @@ Databricks table targets used by this server:
 - `simulcra.snapshot_service_metrics` (per-service rows)
 - `simulcra.snapshots` (one row per emitted snapshot)
 - `simulcra.runs` (run lifecycle rows)
+- `simulcra.run_topologies` (one row per run with topology JSON)
 
 ## Requirements
 
@@ -93,12 +94,20 @@ curl -X POST http://localhost:3001/ai/generate-topology \
 
 ### `POST /runs/start`
 
-Writes run start metadata to Databricks.
+Writes run start metadata and topology JSON to Databricks.
 
 ```bash
 curl -X POST http://localhost:3001/runs/start \
   -H 'Content-Type: application/json' \
-  -d '{"runId":"run-123","topologyName":"Checkout Flow","nodeCount":8}'
+  -d '{
+    "runId":"run-123",
+    "topologyName":"Checkout Flow",
+    "nodeCount":8,
+    "topology":{
+      "nodes":[{"id":"node-0","type":"producer","label":"Producer"}],
+      "edges":[]
+    }
+  }'
 ```
 
 ### `POST /runs/end`

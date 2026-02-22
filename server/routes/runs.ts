@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { endRunInDatabricks, startRunInDatabricks } from '../services/databricks.js';
+import { endRunInDatabricks, startRunInDatabricks, writeRunTopologyInDatabricks } from '../services/databricks.js';
 import type { RunStateStore } from '../services/runState.js';
-import { HttpError } from '../types.js';
+import { HttpError, isTopologyConfig } from '../types.js';
 
 interface RunsDeps {
   databricks: { host: string; token: string; warehouseId: string };
@@ -13,12 +13,18 @@ export function createRunsRouter(deps: RunsDeps): Router {
 
   router.post('/start', async (req, res, next) => {
     try {
-      const { runId, topologyName, nodeCount } = req.body ?? {};
-      if (typeof runId !== 'string' || typeof topologyName !== 'string' || typeof nodeCount !== 'number') {
-        throw new HttpError(400, 'Expected { runId, topologyName, nodeCount }');
+      const { runId, topologyName, nodeCount, topology } = req.body ?? {};
+      if (
+        typeof runId !== 'string' ||
+        typeof topologyName !== 'string' ||
+        typeof nodeCount !== 'number' ||
+        !isTopologyConfig(topology)
+      ) {
+        throw new HttpError(400, 'Expected { runId, topologyName, nodeCount, topology }');
       }
 
       await startRunInDatabricks({ runId, topologyName, nodeCount }, deps.databricks);
+      await writeRunTopologyInDatabricks(runId, topology, deps.databricks);
       deps.runState.markStarted(runId);
       res.status(200).json({ ok: true });
     } catch (err) {
