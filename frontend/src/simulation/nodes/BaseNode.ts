@@ -3,6 +3,9 @@ import type { MessageRouter } from '../engine/MessageRouter';
 import type { IncomingMessage, SimMessage } from '../engine/InternalTypes';
 import { MetricsCollector } from '../engine/MetricsCollector';
 
+// Base node contract shared by all simulated services.
+// It owns inbox/queue bookkeeping, emits receive/send/crash/recover events, and blocks traffic while crashed.
+// Concrete nodes only implement onTick processing logic; routing and event shapes stay consistent here.
 export abstract class BaseNode {
   readonly id: string;
 

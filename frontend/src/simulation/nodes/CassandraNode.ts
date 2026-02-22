@@ -1,6 +1,9 @@
 import type { MessageRouter } from '../engine/MessageRouter';
 import { BaseNode } from './BaseNode';
 
+// Cassandra model: partition-friendly datastore with high-ish throughput and eventual-consistency style behavior.
+// Throughput budget limits per tick processing while queue pressure increases rejection/error probability.
+// Latency jitter is narrower than slow object stores but wider than in-memory services.
 export class CassandraNode extends BaseNode {
   private carry = 0;
 

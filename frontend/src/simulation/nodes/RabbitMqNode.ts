@@ -1,6 +1,9 @@
 import type { MessageRouter } from '../engine/MessageRouter';
 import { BaseNode } from './BaseNode';
 
+// RabbitMQ model: broker-consumer behavior with prefetch and ack timeout semantics.
+// Prefetch caps in-flight processing per tick, so large backlogs can persist even with high throughput config.
+// Messages whose simulated processing latency exceeds ack timeout are dropped as timeout failures.
 export class RabbitMqNode extends BaseNode {
   private carry = 0;
 

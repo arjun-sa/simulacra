@@ -1,6 +1,9 @@
 import type { MessageRouter } from '../engine/MessageRouter';
 import { BaseNode } from './BaseNode';
 
+// S3 model: object storage sink/profile with high latency and lower request throughput.
+// Multipart threshold increases effective latency to represent large-object upload overhead.
+// Failure rate is typically low but non-zero, which helps model durable-store write failures.
 export class S3Node extends BaseNode {
   private carry = 0;
 

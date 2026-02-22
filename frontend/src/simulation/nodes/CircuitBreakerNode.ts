@@ -3,6 +3,9 @@ import { BaseNode } from './BaseNode';
 
 type CircuitState = 'closed' | 'open' | 'half-open';
 
+// Circuit breaker model: protects downstream calls with closed/open/half-open behavior.
+// It tracks recent success/failure outcomes and opens when error ratio crosses threshold.
+// While open it rejects traffic, then probes in half-open mode and closes only after consecutive successes.
 export class CircuitBreakerNode extends BaseNode {
   private state: CircuitState = 'closed';
 

@@ -1,6 +1,9 @@
 import type { MessageRouter } from '../engine/MessageRouter';
 import { BaseNode } from './BaseNode';
 
+// Worker model: main application processing pool.
+// Capacity scales with replicas and throughput settings; requests beyond capacity remain queued.
+// Each processed request can fail probabilistically and successful work adds latency jitter before forwarding.
 export class WorkerNode extends BaseNode {
   private carry = 0;
 

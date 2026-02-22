@@ -1,6 +1,9 @@
 import type { MessageRouter } from '../engine/MessageRouter';
 import { BaseNode } from './BaseNode';
 
+// Generic database model: latency-sensitive persistent store with limited write/read throughput.
+// Processing budget is throughput-bound each tick, so backlog naturally accumulates under burst traffic.
+// Error probability increases with queue pressure to mimic saturation and timeout amplification.
 export class DatabaseNode extends BaseNode {
   private carry = 0;
 

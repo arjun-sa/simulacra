@@ -1,6 +1,9 @@
 import type { MessageRouter } from '../engine/MessageRouter';
 import { BaseNode } from './BaseNode';
 
+// Kafka model: partitioned broker with queue isolation per partition.
+// Incoming messages are assigned round-robin across partitions, then drained per partition throughput budget.
+// This produces realistic lag/imbalance effects without requiring full broker semantics.
 export class KafkaNode extends BaseNode {
   private readonly partitionQueues: Array<Array<{ id: string; createdAt: number }>>;
 

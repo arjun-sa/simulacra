@@ -1,6 +1,9 @@
 import type { MessageRouter } from '../engine/MessageRouter';
 import { BaseNode } from './BaseNode';
 
+// PostgreSQL model: OLTP-style relational datastore profile.
+// It favors moderate throughput, bounded jittery latency, and increasing failure risk under backlog pressure.
+// Use this when you want stricter capacity limits than generic/high-throughput storage nodes.
 export class PostgreSqlNode extends BaseNode {
   private carry = 0;
 

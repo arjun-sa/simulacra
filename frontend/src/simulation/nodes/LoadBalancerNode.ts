@@ -1,6 +1,9 @@
 import type { MessageRouter } from '../engine/MessageRouter';
 import { BaseNode } from './BaseNode';
 
+// Load balancer model: forwards queued requests across downstream targets using round robin.
+// Targets are considered healthy unless the simulation marks them as crashed.
+// If all targets are unavailable, queued requests are drained/dropped to reflect unavailable downstream capacity.
 export class LoadBalancerNode extends BaseNode {
   private rrIndex = 0;
 

@@ -11,6 +11,7 @@ export interface RouteOptions {
 export class MessageRouter {
   private readonly edgeMap = new Map<string, EdgeConfig[]>();
   private readonly routingModeByNode = new Map<string, 'single' | 'broadcast'>();
+  private readonly dlqNodeIds = new Set<string>();
 
   constructor(
     topology: TopologyConfig,
@@ -24,14 +25,19 @@ export class MessageRouter {
     }
     for (const node of topology.nodes) {
       this.routingModeByNode.set(node.id, node.routingMode ?? 'single');
+      if (node.type === 'dead_letter_queue') {
+        this.dlqNodeIds.add(node.id);
+      }
     }
   }
 
   routeMessage(fromNodeId: string, message: SimMessage, options?: RouteOptions): number {
     const outgoing = this.edgeMap.get(fromNodeId) ?? [];
+    const nonDlqOutgoing = outgoing.filter((edge) => !this.dlqNodeIds.has(edge.targetId));
+    const candidates = nonDlqOutgoing.length > 0 ? nonDlqOutgoing : outgoing;
     const targets = options?.onlyTargetIds
       ? outgoing.filter((edge) => options.onlyTargetIds?.includes(edge.targetId))
-      : this.selectTargets(fromNodeId, message.id, outgoing);
+      : this.selectTargets(fromNodeId, message.id, candidates);
 
     const latencyMs = options?.latencyMs ?? 0;
     const now = this.getSimTime();

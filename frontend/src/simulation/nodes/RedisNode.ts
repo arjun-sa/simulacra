@@ -1,6 +1,9 @@
 import type { MessageRouter } from '../engine/MessageRouter';
 import { BaseNode } from './BaseNode';
 
+// Redis model: high-throughput in-memory service with fast-path hit behavior.
+// Hit rate biases latency lower to approximate memory hits vs slower fallback operations.
+// Unlike CacheNode, this node always forwards, so it behaves like an inline cache/service tier.
 export class RedisNode extends BaseNode {
   private carry = 0;
 

@@ -1,6 +1,9 @@
 import type { MessageRouter } from '../engine/MessageRouter';
 import { BaseNode } from './BaseNode';
 
+// Elasticsearch model: indexing/search backend with refresh-cycle overhead.
+// It enforces per-tick indexing capacity and can reject traffic as queues grow.
+// Latency includes configurable refresh influence, so tuning refresh interval affects end-to-end timing.
 export class ElasticsearchNode extends BaseNode {
   private carry = 0;
 

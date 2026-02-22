@@ -1,6 +1,9 @@
 import type { MessageRouter } from '../engine/MessageRouter';
 import { BaseNode } from './BaseNode';
 
+// MongoDB model: document-store profile with moderate throughput and elastic latency.
+// Queue depth raises dynamic failure probability to simulate performance degradation under load.
+// Successful operations forward with jitter to represent varied document/query costs.
 export class MongoDbNode extends BaseNode {
   private carry = 0;
 

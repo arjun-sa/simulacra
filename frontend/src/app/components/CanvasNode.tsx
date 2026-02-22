@@ -177,8 +177,10 @@ export function CanvasNode({
         
         {/* Icon */}
         <foreignObject x="35" y="35" width="50" height="50">
-          <div className="flex items-center justify-center w-full h-full text-white">
-            {NODE_ICONS[node.type]}
+          <div className="flex items-center justify-center w-full h-full">
+            <div className="w-10 h-10 rounded-full bg-white border border-gray-200 text-black flex items-center justify-center">
+              {NODE_ICONS[node.type]}
+            </div>
           </div>
         </foreignObject>
 

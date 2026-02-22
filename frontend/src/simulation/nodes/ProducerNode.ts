@@ -2,6 +2,9 @@ import type { MessageRouter } from '../engine/MessageRouter';
 import { generateId } from '../utils/id';
 import { BaseNode } from './BaseNode';
 
+// Producer model: synthetic ingress source for the whole topology.
+// It creates new message IDs each tick using fractional carry so sub-10 TPS values still behave smoothly.
+// It has no inbox dependency, so downstream pressure appears as queue growth in later nodes.
 export class ProducerNode extends BaseNode {
   private carry = 0;
 

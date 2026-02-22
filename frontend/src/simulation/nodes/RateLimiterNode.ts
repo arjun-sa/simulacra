@@ -1,6 +1,9 @@
 import type { MessageRouter } from '../engine/MessageRouter';
 import { BaseNode } from './BaseNode';
 
+// Rate limiter model: token-bucket admission control for upstream protection.
+// Tokens refill over time from configured rate and burst; requests without tokens are dropped immediately.
+// This node is useful for testing how aggressive throttling shifts failures from downstream to ingress.
 export class RateLimiterNode extends BaseNode {
   private tokens = 0;
 

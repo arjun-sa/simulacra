@@ -1,6 +1,9 @@
 import type { MessageRouter } from '../engine/MessageRouter';
 import { BaseNode } from './BaseNode';
 
+// Consumer group model: consumes broker backlog with replica-scaled capacity.
+// Effective throughput is reduced when replicas are marked down, and carry preserves fractional rates across ticks.
+// It tracks lag as a first-class signal so backlog pressure is visible in metrics.
 export class ConsumerGroupNode extends BaseNode {
   private carry = 0;
 

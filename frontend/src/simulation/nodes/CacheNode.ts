@@ -1,6 +1,9 @@
 import type { MessageRouter } from '../engine/MessageRouter';
 import { BaseNode } from './BaseNode';
 
+// Cache model: read-through style cache gate in front of downstream dependencies.
+// Hits terminate locally (no forward), which directly reduces downstream load and queue pressure.
+// Misses incur cache latency and continue downstream to the next dependency.
 export class CacheNode extends BaseNode {
   onTick(_simTimeMs: number, router: MessageRouter): void {
     if (this.isCrashed()) {
@@ -18,8 +21,9 @@ export class CacheNode extends BaseNode {
 
       const isHit = Math.random() < hitRate;
       if (isHit) {
-        const latency = 1 + Math.floor(Math.random() * 5);
-        this.send(router, incoming.message, latency);
+        // Cache hit is served here; do not forward downstream.
+        // This makes hits reduce load on dependent services.
+        continue;
       } else {
         this.send(router, incoming.message, this.config.latencyMs ?? 5);
       }

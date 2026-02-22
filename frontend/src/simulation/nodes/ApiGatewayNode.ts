@@ -1,6 +1,9 @@
 import type { MessageRouter } from '../engine/MessageRouter';
 import { BaseNode } from './BaseNode';
 
+// API gateway model: applies admission control before requests enter the internal system.
+// It enforces a per-tick throughput budget and drops over-capacity traffic to simulate shedding.
+// It also drops when configured latency exceeds timeout to mimic gateway timeout behavior.
 export class ApiGatewayNode extends BaseNode {
   private carry = 0;
 
