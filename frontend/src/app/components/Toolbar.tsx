@@ -10,7 +10,7 @@ interface ToolbarProps {
 export function Toolbar({ onExport, onImport, onClear }: ToolbarProps) {
   return (
     <div className="flex items-center gap-2 px-4 py-2 bg-white border-b border-gray-200">
-      <h1 className="text-xl font-bold mr-4">Simulcra</h1>
+      <h1 className="text-xl font-bold mr-4">Simulacra</h1>
       
       <Button variant="outline" size="sm" onClick={onImport}>
         <Upload className="w-4 h-4 mr-2" />

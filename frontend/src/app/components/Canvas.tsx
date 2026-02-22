@@ -43,15 +43,28 @@ export function Canvas({
   const svgRef = useRef<SVGSVGElement>(null);
   const [connectingFrom, setConnectingFrom] = useState<{ nodeId: string; isOutput: boolean } | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+  const didPanRef = useRef(false);
+
+  const getWorldPoint = (clientX: number, clientY: number) => {
+    if (!svgRef.current) return { x: 0, y: 0 };
+    const rect = svgRef.current.getBoundingClientRect();
+    return {
+      x: clientX - rect.left - pan.x,
+      y: clientY - rect.top - pan.y,
+    };
+  };
 
   const [{ isOver }, drop] = useDrop(() => ({
     accept: 'node',
     drop: (item: { nodeType: NodeType }, monitor) => {
       const offset = monitor.getClientOffset();
-      if (offset && svgRef.current) {
-        const rect = svgRef.current.getBoundingClientRect();
-        const x = offset.x - rect.left - 60; // Center on cursor
-        const y = offset.y - rect.top - 60;
+      if (offset) {
+        const worldPoint = getWorldPoint(offset.x, offset.y);
+        const x = worldPoint.x - 60; // Center on cursor
+        const y = worldPoint.y - 60;
         onAddNode(item.nodeType, x, y);
       }
     },
@@ -61,17 +74,51 @@ export function Canvas({
   }));
 
   const handleSvgMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (!connectingFrom || !svgRef.current) return;
-    const rect = svgRef.current.getBoundingClientRect();
-    setMousePos({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    });
+    if (isPanning) {
+      const dx = e.clientX - panStartRef.current.x;
+      const dy = e.clientY - panStartRef.current.y;
+      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+        didPanRef.current = true;
+      }
+      setPan({
+        x: panStartRef.current.panX + dx,
+        y: panStartRef.current.panY + dy,
+      });
+      return;
+    }
+
+    if (!connectingFrom) return;
+    const worldPoint = getWorldPoint(e.clientX, e.clientY);
+    setMousePos(worldPoint);
+  };
+
+  const handleSvgMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+    const target = e.target as SVGElement;
+    const isBackgroundTarget =
+      e.target === e.currentTarget || target.getAttribute('data-canvas-background') === 'true';
+    if (e.button !== 0 || !isBackgroundTarget || connectingFrom) return;
+    setIsPanning(true);
+    didPanRef.current = false;
+    panStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      panX: pan.x,
+      panY: pan.y,
+    };
   };
 
   const handleSvgMouseUp = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (isPanning) {
+      setIsPanning(false);
+      return;
+    }
+
+    const target = e.target as SVGElement;
+    const isBackgroundTarget =
+      e.target === e.currentTarget || target.getAttribute('data-canvas-background') === 'true';
+
     // Only cancel connection when mouse is released on the empty canvas.
-    if (e.target === e.currentTarget) {
+    if (isBackgroundTarget) {
       setConnectingFrom(null);
     }
   };
@@ -106,7 +153,16 @@ export function Canvas({
   };
 
   const handleCanvasClick = (e: React.MouseEvent) => {
-    if (e.target === svgRef.current) {
+    if (didPanRef.current) {
+      didPanRef.current = false;
+      return;
+    }
+
+    const target = e.target as SVGElement;
+    const isBackgroundTarget =
+      e.target === svgRef.current || target.getAttribute('data-canvas-background') === 'true';
+
+    if (isBackgroundTarget) {
       onSelectNode(null);
       onSelectEdge(null);
       setConnectingFrom(null);
@@ -152,7 +208,8 @@ export function Canvas({
     >
       <svg
         ref={svgRef}
-        className="w-full h-full"
+        className={`w-full h-full ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
+        onMouseDown={handleSvgMouseDown}
         onMouseMove={handleSvgMouseMove}
         onMouseUp={handleSvgMouseUp}
         onClick={handleCanvasClick}
@@ -165,67 +222,77 @@ export function Canvas({
             <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#E5E7EB" strokeWidth="0.5" />
           </pattern>
         </defs>
-        <rect width="100%" height="100%" fill="url(#grid)" />
 
-        {/* Edges */}
-        {edges.map((edge) => (
-          <Edge
-            key={edge.id}
-            edge={edge}
-            nodes={nodes}
-            selected={edge.id === selectedEdgeId}
-            error={getEdgeError(edge.id)}
-            onClick={() => {
-              onSelectEdge(edge.id);
-              onSelectNode(null);
-            }}
+        <g transform={`translate(${pan.x}, ${pan.y})`}>
+          <rect
+            x="-10000"
+            y="-10000"
+            width="20000"
+            height="20000"
+            fill="url(#grid)"
+            data-canvas-background="true"
           />
-        ))}
 
-        {/* Temporary connection line */}
-        {connectingFrom && (
-          <line
-            x1={
-              nodes.find((n) => n.id === connectingFrom.nodeId)
-                ? nodes.find((n) => n.id === connectingFrom.nodeId)!.x + (connectingFrom.isOutput ? 110 : 10)
-                : 0
-            }
-            y1={
-              nodes.find((n) => n.id === connectingFrom.nodeId)
-                ? nodes.find((n) => n.id === connectingFrom.nodeId)!.y + 60
-                : 0
-            }
-            x2={mousePos.x}
-            y2={mousePos.y}
-            stroke="#3B82F6"
-            strokeWidth="2"
-            strokeDasharray="5,5"
-          />
-        )}
+          {/* Edges */}
+          {edges.map((edge) => (
+            <Edge
+              key={edge.id}
+              edge={edge}
+              nodes={nodes}
+              selected={edge.id === selectedEdgeId}
+              error={getEdgeError(edge.id)}
+              onClick={() => {
+                onSelectEdge(edge.id);
+                onSelectNode(null);
+              }}
+            />
+          ))}
 
-        {/* Message particles */}
-        {recentMessageEvents.map((event) => (
-          <MessageParticle key={event.id} event={event} nodes={nodes} speed={playbackSpeed} />
-        ))}
+          {/* Temporary connection line */}
+          {connectingFrom && (
+            <line
+              x1={
+                nodes.find((n) => n.id === connectingFrom.nodeId)
+                  ? nodes.find((n) => n.id === connectingFrom.nodeId)!.x + (connectingFrom.isOutput ? 110 : 10)
+                  : 0
+              }
+              y1={
+                nodes.find((n) => n.id === connectingFrom.nodeId)
+                  ? nodes.find((n) => n.id === connectingFrom.nodeId)!.y + 60
+                  : 0
+              }
+              x2={mousePos.x}
+              y2={mousePos.y}
+              stroke="#3B82F6"
+              strokeWidth="2"
+              strokeDasharray="5,5"
+            />
+          )}
 
-        {/* Nodes */}
-        {nodes.map((node) => (
-          <CanvasNode
-            key={node.id}
-            node={node}
-            selected={node.id === selectedNodeId}
-            isConnecting={Boolean(connectingFrom)}
-            snapshot={snapshots[node.id]}
-            crashed={crashedNodes.has(node.id)}
-            latencySpike={latencySpikeNodes.has(node.id)}
-            onSelect={() => handleNodeClick(node.id)}
-            onDragStart={() => {}}
-            onDrag={(dx, dy) => onUpdateNode(node.id, dx, dy)}
-            onDragEnd={() => {}}
-            onConnectStart={handleConnectStart}
-            onMouseUp={handleNodeMouseUp}
-          />
-        ))}
+          {/* Message particles */}
+          {recentMessageEvents.map((event) => (
+            <MessageParticle key={event.id} event={event} nodes={nodes} speed={playbackSpeed} />
+          ))}
+
+          {/* Nodes */}
+          {nodes.map((node) => (
+            <CanvasNode
+              key={node.id}
+              node={node}
+              selected={node.id === selectedNodeId}
+              isConnecting={Boolean(connectingFrom)}
+              snapshot={snapshots[node.id]}
+              crashed={crashedNodes.has(node.id)}
+              latencySpike={latencySpikeNodes.has(node.id)}
+              onSelect={() => handleNodeClick(node.id)}
+              onDragStart={() => {}}
+              onDrag={(dx, dy) => onUpdateNode(node.id, dx, dy)}
+              onDragEnd={() => {}}
+              onConnectStart={handleConnectStart}
+              onMouseUp={handleNodeMouseUp}
+            />
+          ))}
+        </g>
       </svg>
 
       {isOver && (

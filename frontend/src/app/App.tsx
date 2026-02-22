@@ -20,16 +20,53 @@ import { NodePalette } from './components/NodePalette';
 import { Canvas } from './components/Canvas';
 import { NodeConfigPanel } from './components/NodeConfigPanel';
 import { PlayerControls } from './components/PlayerControls';
-import { EventTimeline } from './components/EventTimeline';
 import { MetricsPanel } from './components/MetricsPanel';
 import { Toolbar } from './components/Toolbar';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
 import { SimulationEngine } from '../simulation/engine/SimulationEngine';
+import { DEFAULT_SYSTEM_NODES, DEFAULT_SYSTEM_EDGES } from './defaultSystem';
+
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || 'http://localhost:3001';
+
+type BackendServiceSnapshot = {
+  nodeId: string;
+  nodeType: NodeType;
+  throughputPerSec: number;
+  avgLatencyMs: number;
+  p95LatencyMs: number;
+  errorRate: number;
+  queueDepth: number;
+  healthScore: number;
+  status: 'healthy' | 'degraded' | 'crashed';
+};
+
+type BackendSystemSnapshot = {
+  runId: string;
+  timestamp: number;
+  services: Record<string, BackendServiceSnapshot>;
+  system: {
+    totalThroughput: number;
+    overallHealthScore: number;
+    bottleneckService: string | null;
+  };
+};
+
+const cloneDefaultNodes = () => DEFAULT_SYSTEM_NODES.map((node) => ({ ...node }));
+const cloneDefaultEdges = () => DEFAULT_SYSTEM_EDGES.map((edge) => ({ ...edge }));
+
+const getNextCounterValue = (ids: string[], prefix: string) =>
+  Math.max(
+    ...ids.map((id) => {
+      const numeric = Number.parseInt(id.replace(`${prefix}-`, ''), 10);
+      return Number.isNaN(numeric) ? 0 : numeric;
+    }),
+    0
+  ) + 1;
 
 export default function App() {
-  const [nodes, setNodes] = useState<CanvasNode[]>([]);
-  const [edges, setEdges] = useState<EdgeConfig[]>([]);
+  const [nodes, setNodes] = useState<CanvasNode[]>(() => cloneDefaultNodes());
+  const [edges, setEdges] = useState<EdgeConfig[]>(() => cloneDefaultEdges());
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [playbackState, setPlaybackState] = useState<PlaybackState>('idle');
@@ -41,8 +78,72 @@ export default function App() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const engineRef = useRef<SimulationEngine | null>(null);
-  const nodeIdCounter = useRef(0);
-  const edgeIdCounter = useRef(0);
+  const activeRunIdRef = useRef<string | null>(null);
+  const nodeIdCounter = useRef(getNextCounterValue(DEFAULT_SYSTEM_NODES.map((node) => node.id), 'node'));
+  const edgeIdCounter = useRef(getNextCounterValue(DEFAULT_SYSTEM_EDGES.map((edge) => edge.id), 'edge'));
+
+  const postJson = async (path: string, payload: unknown) => {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`${path} failed (${response.status}): ${text}`);
+    }
+  };
+
+  const toStatus = (healthScore: number): 'healthy' | 'degraded' | 'crashed' => {
+    if (healthScore <= 0.25) return 'crashed';
+    if (healthScore <= 0.7) return 'degraded';
+    return 'healthy';
+  };
+
+  const toBackendSnapshot = (
+    snapshot: SystemSnapshot,
+    nodeTypeMap: Map<string, NodeType>
+  ): BackendSystemSnapshot => {
+    const services = Object.entries(snapshot.services).reduce<Record<string, BackendServiceSnapshot>>(
+      (acc, [nodeId, service]) => {
+        const nodeType = nodeTypeMap.get(nodeId) ?? 'worker';
+        acc[nodeId] = {
+          nodeId: service.nodeId,
+          nodeType,
+          throughputPerSec: service.throughputPerSec,
+          avgLatencyMs: service.avgLatencyMs,
+          p95LatencyMs: service.p95LatencyMs,
+          errorRate: service.errorRate,
+          queueDepth: Math.max(0, Math.round(service.queueDepth)),
+          healthScore: service.healthScore,
+          status: toStatus(service.healthScore),
+        };
+        return acc;
+      },
+      {}
+    );
+
+    return {
+      runId: snapshot.runId,
+      timestamp: snapshot.snapshotAt,
+      services,
+      system: {
+        totalThroughput: snapshot.totalThroughput,
+        overallHealthScore: snapshot.overallHealthScore,
+        bottleneckService: snapshot.bottleneckNodeId,
+      },
+    };
+  };
+
+  const endActiveRun = () => {
+    const runId = activeRunIdRef.current;
+    if (!runId) return;
+    activeRunIdRef.current = null;
+    void postJson('/runs/end', { runId }).catch((error) => {
+      console.error('Failed to end run', error);
+    });
+  };
 
   useEffect(() => {
     if (!engineRef.current || playbackState !== 'playing') {
@@ -85,6 +186,7 @@ export default function App() {
 
   useEffect(() => {
     return () => {
+      endActiveRun();
       engineRef.current?.reset();
       engineRef.current = null;
     };
@@ -193,14 +295,8 @@ export default function App() {
         setSelectedEdgeId(null);
         
         // Update counters
-        nodeIdCounter.current = Math.max(
-          ...canvasNodes.map((n) => parseInt(n.id.split('-')[1]) || 0),
-          0
-        ) + 1;
-        edgeIdCounter.current = Math.max(
-          ...topology.edges.map((e) => parseInt(e.id.split('-')[1]) || 0),
-          0
-        ) + 1;
+        nodeIdCounter.current = getNextCounterValue(canvasNodes.map((node) => node.id), 'node');
+        edgeIdCounter.current = getNextCounterValue(topology.edges.map((edge) => edge.id), 'edge');
 
         toast.success('Imported topology');
       } catch (error) {
@@ -219,10 +315,16 @@ export default function App() {
   });
 
   const buildEngine = () => {
-    const engine = new SimulationEngine(buildTopology());
+    const topology = buildTopology();
+    const nodeTypeMap = new Map(topology.nodes.map((node) => [node.id, node.type] as const));
+    const engine = new SimulationEngine(topology);
     engine.onSnapshot((snapshot) => {
       setSystemSnapshot(snapshot);
       setEvents([...engine.getEvents()]);
+      const payload = toBackendSnapshot(snapshot, nodeTypeMap);
+      void postJson('/metrics/snapshot', payload).catch((error) => {
+        console.error('Failed to push snapshot', error);
+      });
     });
     engine.setSpeed(playbackSpeed);
     engineRef.current = engine;
@@ -231,6 +333,7 @@ export default function App() {
 
   const handleClear = () => {
     if (nodes.length === 0 && edges.length === 0) return;
+    endActiveRun();
     engineRef.current?.reset();
     engineRef.current = null;
     setNodes([]);
@@ -250,11 +353,20 @@ export default function App() {
       return;
     }
 
+    endActiveRun();
     engineRef.current?.reset();
     const engine = buildEngine();
     engine.start();
     setSystemSnapshot(engine.getSnapshot());
     setEvents([...engine.getEvents()]);
+    activeRunIdRef.current = engine.getRunId();
+    void postJson('/runs/start', {
+      runId: engine.getRunId(),
+      topologyName: 'Canvas Topology',
+      nodeCount: nodes.length,
+    }).catch((error) => {
+      console.error('Failed to start run', error);
+    });
     setPlaybackState('playing');
     setCrashedNodes(new Set());
     setLatencySpikeNodes(new Set());
@@ -279,6 +391,7 @@ export default function App() {
   };
 
   const handleReset = () => {
+    endActiveRun();
     engineRef.current?.reset();
     engineRef.current = null;
     setPlaybackState('idle');
@@ -328,13 +441,13 @@ export default function App() {
         />
 
         <ResizablePanelGroup direction="vertical" className="flex-1">
-          <ResizablePanel defaultSize={15} minSize={10}>
-            <MetricsPanel snapshot={systemSnapshot} />
+          <ResizablePanel defaultSize={24} minSize={16}>
+            <MetricsPanel snapshot={systemSnapshot} events={events} />
           </ResizablePanel>
 
           <ResizableHandle />
 
-          <ResizablePanel defaultSize={70} minSize={40}>
+          <ResizablePanel defaultSize={76} minSize={50}>
             <div className="flex h-full overflow-hidden">
               <NodePalette />
               
@@ -355,19 +468,15 @@ export default function App() {
                 onAddEdge={handleAddEdge}
                 onDeleteSelected={handleDeleteSelected}
               />
-              
-              <NodeConfigPanel
-                node={selectedNode}
-                onUpdate={handleUpdateNodeConfig}
-                onClose={() => setSelectedNodeId(null)}
-              />
+
+              {selectedNode && (
+                <NodeConfigPanel
+                  node={selectedNode}
+                  onUpdate={handleUpdateNodeConfig}
+                  onClose={() => setSelectedNodeId(null)}
+                />
+              )}
             </div>
-          </ResizablePanel>
-
-          <ResizableHandle />
-
-          <ResizablePanel defaultSize={15} minSize={10}>
-            <EventTimeline events={events} />
           </ResizablePanel>
         </ResizablePanelGroup>
 

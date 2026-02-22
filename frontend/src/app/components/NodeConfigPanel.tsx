@@ -36,11 +36,7 @@ const FIELD_LABELS: Record<string, string> = {
 
 export function NodeConfigPanel({ node, onUpdate, onClose }: NodeConfigPanelProps) {
   if (!node) {
-    return (
-      <div className="w-80 bg-gray-50 border-l border-gray-200 p-4">
-        <div className="text-gray-500 text-center">Select a node to configure</div>
-      </div>
-    );
+    return null;
   }
 
   const relevantFields = TYPE_FIELDS[node.type] || [];
