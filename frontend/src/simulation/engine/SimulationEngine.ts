@@ -16,6 +16,14 @@ import { ApiGatewayNode } from '../nodes/ApiGatewayNode';
 import { CircuitBreakerNode } from '../nodes/CircuitBreakerNode';
 import { DeadLetterQueueNode } from '../nodes/DeadLetterQueueNode';
 import { ConsumerGroupNode } from '../nodes/ConsumerGroupNode';
+import { RedisNode } from '../nodes/RedisNode';
+import { MongoDbNode } from '../nodes/MongoDbNode';
+import { CassandraNode } from '../nodes/CassandraNode';
+import { PostgreSqlNode } from '../nodes/PostgreSqlNode';
+import { RabbitMqNode } from '../nodes/RabbitMqNode';
+import { ElasticsearchNode } from '../nodes/ElasticsearchNode';
+import { S3Node } from '../nodes/S3Node';
+import { RateLimiterNode } from '../nodes/RateLimiterNode';
 
 const DEFAULT_TICK_MS = 100;
 type MessageLifecycleStatus = 'in_flight' | 'routing_to_dlq' | 'delivered' | 'dlq';
@@ -374,8 +382,24 @@ export class SimulationEngine {
         return new WorkerNode(config);
       case 'database':
         return new DatabaseNode(config);
+      case 'postgresql':
+        return new PostgreSqlNode(config);
+      case 'mongodb':
+        return new MongoDbNode(config);
+      case 'cassandra':
+        return new CassandraNode(config);
+      case 'elasticsearch':
+        return new ElasticsearchNode(config);
       case 'cache':
         return new CacheNode(config);
+      case 'redis':
+        return new RedisNode(config);
+      case 'rabbitmq':
+        return new RabbitMqNode(config);
+      case 's3':
+        return new S3Node(config);
+      case 'rate_limiter':
+        return new RateLimiterNode(config);
       case 'load_balancer':
         return new LoadBalancerNode(config);
       case 'api_gateway':

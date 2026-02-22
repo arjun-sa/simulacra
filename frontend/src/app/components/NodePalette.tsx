@@ -11,6 +11,11 @@ import {
   Inbox,
   Users,
   Activity,
+  HardDrive,
+  Search,
+  Cloud,
+  Gauge,
+  GitBranch,
 } from 'lucide-react';
 
 const NODE_CONFIGS: Array<{ type: NodeType; label: string; icon: React.ReactNode }> = [
@@ -18,7 +23,15 @@ const NODE_CONFIGS: Array<{ type: NodeType; label: string; icon: React.ReactNode
   { type: 'kafka', label: 'Kafka', icon: <Grid3X3 className="w-5 h-5" /> },
   { type: 'worker', label: 'Worker', icon: <Server className="w-5 h-5" /> },
   { type: 'database', label: 'Database', icon: <Database className="w-5 h-5" /> },
+  { type: 'postgresql', label: 'PostgreSQL', icon: <Database className="w-5 h-5" /> },
+  { type: 'mongodb', label: 'MongoDB', icon: <HardDrive className="w-5 h-5" /> },
+  { type: 'cassandra', label: 'Cassandra', icon: <HardDrive className="w-5 h-5" /> },
+  { type: 'elasticsearch', label: 'Elasticsearch', icon: <Search className="w-5 h-5" /> },
   { type: 'cache', label: 'Cache', icon: <Zap className="w-5 h-5" /> },
+  { type: 'redis', label: 'Redis', icon: <Zap className="w-5 h-5" /> },
+  { type: 'rabbitmq', label: 'RabbitMQ', icon: <GitBranch className="w-5 h-5" /> },
+  { type: 's3', label: 'S3', icon: <Cloud className="w-5 h-5" /> },
+  { type: 'rate_limiter', label: 'Rate Limiter', icon: <Gauge className="w-5 h-5" /> },
   { type: 'load_balancer', label: 'Load Balancer', icon: <Box className="w-5 h-5" /> },
   { type: 'api_gateway', label: 'API Gateway', icon: <Shield className="w-5 h-5" /> },
   { type: 'circuit_breaker', label: 'Circuit Breaker', icon: <AlertCircle className="w-5 h-5" /> },

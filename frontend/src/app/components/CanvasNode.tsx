@@ -12,6 +12,11 @@ import {
   Inbox,
   Users,
   Activity,
+  HardDrive,
+  Search,
+  Cloud,
+  Gauge,
+  GitBranch,
 } from 'lucide-react';
 
 const NODE_ICONS: Record<string, React.ReactNode> = {
@@ -19,7 +24,15 @@ const NODE_ICONS: Record<string, React.ReactNode> = {
   kafka: <Grid3X3 className="w-6 h-6" />,
   worker: <Server className="w-6 h-6" />,
   database: <Database className="w-6 h-6" />,
+  postgresql: <Database className="w-6 h-6" />,
+  mongodb: <HardDrive className="w-6 h-6" />,
+  cassandra: <HardDrive className="w-6 h-6" />,
+  elasticsearch: <Search className="w-6 h-6" />,
   cache: <Zap className="w-6 h-6" />,
+  redis: <Zap className="w-6 h-6" />,
+  rabbitmq: <GitBranch className="w-6 h-6" />,
+  s3: <Cloud className="w-6 h-6" />,
+  rate_limiter: <Gauge className="w-6 h-6" />,
   load_balancer: <Box className="w-6 h-6" />,
   api_gateway: <Shield className="w-6 h-6" />,
   circuit_breaker: <AlertCircle className="w-6 h-6" />,

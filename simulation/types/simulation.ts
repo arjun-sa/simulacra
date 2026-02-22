@@ -3,7 +3,15 @@ export type NodeType =
   | 'kafka'
   | 'worker'
   | 'database'
+  | 'postgresql'
+  | 'mongodb'
+  | 'cassandra'
+  | 'elasticsearch'
   | 'cache'
+  | 'redis'
+  | 'rabbitmq'
+  | 's3'
+  | 'rate_limiter'
   | 'load_balancer'
   | 'api_gateway'
   | 'circuit_breaker'
@@ -26,6 +34,18 @@ export interface NodeConfig {
   timeoutMs?: number;
   cacheHitRate?: number;
   circuitBreakerThreshold?: number;
+  maxMemoryMb?: number;
+  evictionPolicy?: 'allkeys-lru' | 'volatile-lru' | 'noeviction';
+  readPreference?: 'primary' | 'secondary' | 'nearest';
+  writeConcern?: 1 | 2 | 3;
+  replicationFactor?: number;
+  consistencyLevel?: 'one' | 'quorum' | 'all';
+  ackTimeoutMs?: number;
+  prefetchCount?: number;
+  indexRefreshMs?: number;
+  multipartThresholdMb?: number;
+  rateLimitPerSec?: number;
+  burstCapacity?: number;
   sink?: boolean;
   routingMode?: RoutingMode;
 }

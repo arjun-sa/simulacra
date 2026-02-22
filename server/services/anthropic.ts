@@ -4,7 +4,7 @@ import { isTopologyConfig } from '../types.js';
 const SYSTEM_PROMPT = [
   'Return ONLY JSON matching TopologyConfig.',
   'No markdown, no explanation, no prose.',
-  'Use only node types: producer,kafka,worker,database,cache,load_balancer,api_gateway,circuit_breaker,dead_letter_queue,consumer_group.',
+  'Use only node types: producer,kafka,worker,database,postgresql,mongodb,cassandra,elasticsearch,cache,redis,rabbitmq,s3,rate_limiter,load_balancer,api_gateway,circuit_breaker,dead_letter_queue,consumer_group.',
   'Include nodes[] and edges[] arrays.',
   'Each node must include id,type,label,x,y.',
   'Use left-to-right tiered layout (x increases per tier).'
