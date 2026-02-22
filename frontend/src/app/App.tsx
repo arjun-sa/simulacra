@@ -75,6 +75,8 @@ export default function App() {
   const [systemSnapshot, setSystemSnapshot] = useState<SystemSnapshot | null>(null);
   const [crashedNodes, setCrashedNodes] = useState<Set<string>>(new Set());
   const [latencySpikeNodes, setLatencySpikeNodes] = useState<Set<string>>(new Set());
+  const [metricsCollapsed, setMetricsCollapsed] = useState(false);
+  const [microservicesCollapsed, setMicroservicesCollapsed] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const engineRef = useRef<SimulationEngine | null>(null);
@@ -427,7 +429,15 @@ export default function App() {
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="h-screen flex flex-col bg-gray-100">
-        <Toolbar onExport={handleExport} onImport={handleImport} onClear={handleClear} />
+        <Toolbar
+          onExport={handleExport}
+          onImport={handleImport}
+          onClear={handleClear}
+          onToggleMetrics={() => setMetricsCollapsed((prev) => !prev)}
+          onToggleMicroservices={() => setMicroservicesCollapsed((prev) => !prev)}
+          metricsCollapsed={metricsCollapsed}
+          microservicesCollapsed={microservicesCollapsed}
+        />
         
         <PlayerControls
           state={playbackState}
@@ -441,16 +451,20 @@ export default function App() {
         />
 
         <ResizablePanelGroup direction="vertical" className="flex-1">
-          <ResizablePanel defaultSize={24} minSize={16}>
-            <MetricsPanel snapshot={systemSnapshot} events={events} />
-          </ResizablePanel>
+          {!metricsCollapsed && (
+            <>
+              <ResizablePanel defaultSize={24} minSize={16}>
+                <MetricsPanel snapshot={systemSnapshot} events={events} />
+              </ResizablePanel>
 
-          <ResizableHandle />
+              <ResizableHandle />
+            </>
+          )}
 
-          <ResizablePanel defaultSize={76} minSize={50}>
+          <ResizablePanel defaultSize={metricsCollapsed ? 100 : 76} minSize={50}>
             <div className="flex h-full overflow-hidden">
-              <NodePalette />
-              
+              {!microservicesCollapsed && <NodePalette />}
+
               <Canvas
                 nodes={nodes}
                 edges={edges}

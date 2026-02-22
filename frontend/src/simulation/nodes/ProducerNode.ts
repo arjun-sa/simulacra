@@ -10,7 +10,7 @@ export class ProducerNode extends BaseNode {
       return;
     }
 
-    const throughput = this.config.throughputPerSec ?? 10;
+    const throughput = this.config.throughputPerSec ?? 1;
     const perTick = (throughput / 10) + this.carry;
     const toProduce = Math.floor(perTick);
     this.carry = perTick - toProduce;

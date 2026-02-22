@@ -10,6 +10,8 @@ export type NodeType =
   | 'dead_letter_queue'
   | 'consumer_group';
 
+export type RoutingMode = 'single' | 'broadcast';
+
 export interface NodeConfig {
   id: string;
   type: NodeType;
@@ -24,6 +26,8 @@ export interface NodeConfig {
   timeoutMs?: number;
   cacheHitRate?: number;
   circuitBreakerThreshold?: number;
+  sink?: boolean;
+  routingMode?: RoutingMode;
 }
 
 export interface EdgeConfig {

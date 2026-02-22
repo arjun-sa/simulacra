@@ -10,6 +10,7 @@ export interface RouteOptions {
 
 export class MessageRouter {
   private readonly edgeMap = new Map<string, EdgeConfig[]>();
+  private readonly routingModeByNode = new Map<string, 'single' | 'broadcast'>();
 
   constructor(
     topology: TopologyConfig,
@@ -21,13 +22,16 @@ export class MessageRouter {
       list.push(edge);
       this.edgeMap.set(edge.sourceId, list);
     }
+    for (const node of topology.nodes) {
+      this.routingModeByNode.set(node.id, node.routingMode ?? 'single');
+    }
   }
 
   routeMessage(fromNodeId: string, message: SimMessage, options?: RouteOptions): number {
     const outgoing = this.edgeMap.get(fromNodeId) ?? [];
     const targets = options?.onlyTargetIds
       ? outgoing.filter((edge) => options.onlyTargetIds?.includes(edge.targetId))
-      : outgoing;
+      : this.selectTargets(fromNodeId, message.id, outgoing);
 
     const latencyMs = options?.latencyMs ?? 0;
     const now = this.getSimTime();
@@ -48,5 +52,28 @@ export class MessageRouter {
 
   getDownstreamNodeIds(nodeId: string): string[] {
     return (this.edgeMap.get(nodeId) ?? []).map((edge) => edge.targetId);
+  }
+
+  private selectTargets(fromNodeId: string, messageId: string, outgoing: EdgeConfig[]): EdgeConfig[] {
+    if (outgoing.length <= 1) {
+      return outgoing;
+    }
+
+    const routingMode = this.routingModeByNode.get(fromNodeId) ?? 'single';
+    if (routingMode === 'broadcast') {
+      return outgoing;
+    }
+
+    const index = this.deterministicIndex(messageId, outgoing.length);
+    const selected = outgoing[index];
+    return selected ? [selected] : [];
+  }
+
+  private deterministicIndex(key: string, size: number): number {
+    let hash = 0;
+    for (let i = 0; i < key.length; i += 1) {
+      hash = ((hash * 31) + key.charCodeAt(i)) >>> 0;
+    }
+    return hash % size;
   }
 }

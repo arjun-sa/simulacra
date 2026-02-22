@@ -66,6 +66,30 @@ export function NodeConfigPanel({ node, onUpdate, onClose }: NodeConfigPanelProp
           <div className="mt-1 p-2 bg-gray-100 rounded text-sm">{node.type}</div>
         </div>
 
+        <div>
+          <Label htmlFor="routingMode">Routing Mode</Label>
+          <select
+            id="routingMode"
+            value={node.routingMode ?? 'single'}
+            onChange={(e) => onUpdate({ routingMode: e.target.value as CanvasNode['routingMode'] })}
+            className="mt-1 w-full h-9 rounded-md border border-gray-300 bg-white px-3 text-sm"
+          >
+            <option value="single">Single (deterministic)</option>
+            <option value="broadcast">Broadcast</option>
+          </select>
+        </div>
+
+        <label htmlFor="sink" className="flex items-center gap-2">
+          <input
+            id="sink"
+            type="checkbox"
+            checked={Boolean(node.sink)}
+            onChange={(e) => onUpdate({ sink: e.target.checked })}
+            className="h-4 w-4"
+          />
+          <span className="text-sm">Mark as sink node</span>
+        </label>
+
         {relevantFields.map((field) => (
           <div key={field}>
             <Label htmlFor={field}>{FIELD_LABELS[field] || field}</Label>

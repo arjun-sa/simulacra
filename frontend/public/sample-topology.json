@@ -5,7 +5,7 @@
       "type": "producer",
       "label": "Event Producer",
       "latencyMs": 10,
-      "throughputPerSec": 1000
+      "throughputPerSec": 1
     },
     {
       "id": "node-1",
@@ -52,6 +52,7 @@
       "id": "node-6",
       "type": "database",
       "label": "PostgreSQL",
+      "sink": true,
       "latencyMs": 15,
       "throughputPerSec": 1000,
       "failureRate": 0.01

@@ -1,9 +1,9 @@
-import type { NodeConfig, SystemSnapshot, TopologyConfig } from '../types/simulation';
+import type { NodeConfig, SimEvent, SystemSnapshot, TopologyConfig } from '../types/simulation';
 import { MetricsCollector } from './MetricsCollector';
 import { MetricsAggregator } from './MetricsAggregator';
 import { FailureInjector } from './FailureInjector';
 import { MessageRouter } from './MessageRouter';
-import type { ScheduledDelivery } from './InternalTypes';
+import type { ScheduledDelivery, SimMessage } from './InternalTypes';
 import { generateId } from '../utils/id';
 import { BaseNode } from '../nodes/BaseNode';
 import { ProducerNode } from '../nodes/ProducerNode';
@@ -18,6 +18,7 @@ import { DeadLetterQueueNode } from '../nodes/DeadLetterQueueNode';
 import { ConsumerGroupNode } from '../nodes/ConsumerGroupNode';
 
 const DEFAULT_TICK_MS = 100;
+type MessageLifecycleStatus = 'in_flight' | 'routing_to_dlq' | 'delivered' | 'dlq';
 
 export class SimulationEngine {
   private readonly topology: TopologyConfig;
@@ -35,6 +36,11 @@ export class SimulationEngine {
   private readonly callbacks: Array<(snapshot: SystemSnapshot) => void> = [];
 
   private readonly scheduledDeliveries: ScheduledDelivery[] = [];
+  private readonly sinkNodeIds = new Set<string>();
+  private readonly dlqNodeIds: string[] = [];
+  private readonly messageLifecycle = new Map<string, MessageLifecycleStatus>();
+  private readonly messageCache = new Map<string, SimMessage>();
+  private processedEventIndex = 0;
 
   private runId = generateId();
 
@@ -56,6 +62,12 @@ export class SimulationEngine {
       this.nodeConfigs.set(config.id, config);
       const node = this.createNode(config);
       this.nodes.set(config.id, node);
+      if (config.type === 'dead_letter_queue') {
+        this.dlqNodeIds.push(config.id);
+      }
+      if (config.sink) {
+        this.sinkNodeIds.add(config.id);
+      }
     }
 
     this.router = new MessageRouter(topology, (delivery) => this.scheduleDelivery(delivery), () => this.simTimeMs);
@@ -92,6 +104,9 @@ export class SimulationEngine {
     this.simTimeMs = 0;
     this.paused = false;
     this.scheduledDeliveries.length = 0;
+    this.messageLifecycle.clear();
+    this.messageCache.clear();
+    this.processedEventIndex = 0;
     this.collector.clear();
     this.failureInjector.reset();
 
@@ -141,6 +156,9 @@ export class SimulationEngine {
     }
 
     this.processDueDeliveries();
+    this.processNewEvents();
+    this.processDueDeliveries();
+    this.processNewEvents();
   }
 
   onSnapshot(cb: (snapshot: SystemSnapshot) => void): void {
@@ -183,6 +201,10 @@ export class SimulationEngine {
   }
 
   private scheduleDelivery(delivery: ScheduledDelivery): void {
+    this.messageCache.set(delivery.message.id, delivery.message);
+    if (this.shouldSkipDelivery(delivery.message.id, delivery.targetNodeId)) {
+      return;
+    }
     this.scheduledDeliveries.push(delivery);
     this.scheduledDeliveries.sort((a, b) => a.deliverAt - b.deliverAt);
   }
@@ -194,6 +216,9 @@ export class SimulationEngine {
         break;
       }
       this.scheduledDeliveries.shift();
+      if (this.shouldSkipDelivery(next.message.id, next.targetNodeId)) {
+        continue;
+      }
 
       if (next.forcedEventType) {
         this.collector.recordEvent({
@@ -213,6 +238,94 @@ export class SimulationEngine {
 
       target.receiveMessage(next.message, next.sourceNodeId, this.simTimeMs);
     }
+  }
+
+  private processNewEvents(): void {
+    const events = this.collector.getEvents();
+    for (let i = this.processedEventIndex; i < events.length; i += 1) {
+      const event = events[i];
+      if (!event) {
+        continue;
+      }
+
+      if (event.type === 'message_received') {
+        this.handleMessageReceived(event);
+        continue;
+      }
+
+      if (event.type === 'message_error' || event.type === 'message_dropped') {
+        this.handleMessageFailure(event);
+      }
+    }
+    this.processedEventIndex = events.length;
+  }
+
+  private handleMessageReceived(event: SimEvent): void {
+    if (!event.targetNodeId) {
+      return;
+    }
+
+    if (this.isDlqNode(event.targetNodeId)) {
+      this.messageLifecycle.set(event.messageId, 'dlq');
+      return;
+    }
+
+    if (this.sinkNodeIds.has(event.targetNodeId)) {
+      this.messageLifecycle.set(event.messageId, 'delivered');
+    }
+  }
+
+  private handleMessageFailure(event: SimEvent): void {
+    const current = this.messageLifecycle.get(event.messageId) ?? 'in_flight';
+    if (current !== 'in_flight') {
+      return;
+    }
+
+    this.messageLifecycle.set(event.messageId, 'routing_to_dlq');
+    const fromNodeId = event.sourceNodeId;
+    const dlqTargetId = this.pickDlqTarget(fromNodeId);
+    if (!dlqTargetId) {
+      this.messageLifecycle.set(event.messageId, 'dlq');
+      return;
+    }
+
+    const message = this.messageCache.get(event.messageId) ?? {
+      id: event.messageId,
+      createdAt: this.simTimeMs,
+    };
+
+    this.scheduleDelivery({
+      deliverAt: this.simTimeMs,
+      sourceNodeId: fromNodeId,
+      targetNodeId: dlqTargetId,
+      message,
+      failureInjected: event.failureInjected,
+    });
+  }
+
+  private pickDlqTarget(sourceNodeId: string): string | undefined {
+    const downstreamDlq = this.router
+      .getDownstreamNodeIds(sourceNodeId)
+      .filter((nodeId) => this.isDlqNode(nodeId));
+    if (downstreamDlq.length > 0) {
+      return downstreamDlq[0];
+    }
+    return this.dlqNodeIds[0];
+  }
+
+  private shouldSkipDelivery(messageId: string, targetNodeId: string): boolean {
+    const state = this.messageLifecycle.get(messageId) ?? 'in_flight';
+    if (state === 'delivered' || state === 'dlq') {
+      return true;
+    }
+    if (state === 'routing_to_dlq' && !this.isDlqNode(targetNodeId)) {
+      return true;
+    }
+    return false;
+  }
+
+  private isDlqNode(nodeId: string): boolean {
+    return this.nodeConfigs.get(nodeId)?.type === 'dead_letter_queue';
   }
 
   private syncFailureState(): void {
